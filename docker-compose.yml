@@ -1,0 +1,66 @@
+version: '3'
+services:
+  app:
+    build:
+      context: app
+    stop_signal: SIGKILL
+    ports:
+      - 5000:5000
+    depends_on:
+      - fluentd
+    volumes:
+      - ./app/app.py:/var/server/app.py
+    logging:
+      driver: fluentd
+      options:
+        fluentd-address: 127.0.0.1:24224
+        tag: logstash.access
+
+  fluentd:
+    build: ./fluentd_container
+    volumes:
+      - ./fluentd_container/conf:/fluentd/etc
+    links:
+      - "elasticsearch"
+    restart: always
+    container_name: fluentd
+    ports:
+      - "24224:24224"
+      - "24224:24224/udp"
+    networks:
+      - network
+
+  elasticsearch:
+    image: amazon/opendistro-for-elasticsearch:latest
+    container_name: elasticsearch
+    environment:
+      - cluster.name=elasticsearch
+      - node.name=elasticsearch
+      - discovery.seed_hosts=elasticsearch
+      - cluster.initial_master_nodes=elasticsearch
+      - DISABLE_SECURITY_PLUGIN=true
+    volumes:
+      - elasticsearch:/usr/share/elasticsearch/data
+    ports:
+      - 9200:9200
+    networks:
+      - network
+
+  kibana:
+    image: amazon/opendistro-for-elasticsearch-kibana:latest
+    container_name: kibana
+    ports:
+      - 5601:5601
+    expose:
+      - "5601"
+    environment:
+      ELASTICSEARCH_URL: https://elasticsearch:9200
+      ELASTICSEARCH_HOSTS: https://elasticsearch:9200
+    networks:
+      - network
+volumes:
+  elasticsearch:
+
+networks:
+  network:
+    driver: bridge
